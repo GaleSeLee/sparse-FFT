@@ -4,6 +4,7 @@
 #include <time.h>
 #include <assert.h>
 #include <cstring>
+#include <cuda_runtime.h>
 
 #include "common.h"
 
@@ -26,6 +27,14 @@ void start_case(int c, int r, std::complex<double> *in,
     out_acce = (std::complex<double> *)malloc(sizeof(std::complex<double>) * n);
     std::memset(out_base, 0, sizeof(std::complex<double>) * n);
     std::memset(out_acce, 0, sizeof(std::complex<double>) * n);
+    for (int ii = 0; ii < c; ii++) {
+        int idx_ii = ii * c * c;
+        for (int jj = 0; jj < c; jj++) {
+            int idx_jj = idx_ii + jj * c;
+            for (int kk = 0; kk < c; kk++)
+                in[idx_jj + kk] = randn();
+        }
+    }
 }
 
 bool check_result(int c, std::complex<double> *out_base,
@@ -33,8 +42,11 @@ bool check_result(int c, std::complex<double> *out_base,
 
 }
 
-void end_case() {
-
+void end_case(std::complex<double> *in, std::complex<double> *out_base,
+              std::complex<double> *out_acce) {
+    std::free(in);
+    std::free(out_base);
+    std::free(out_acce);
 }
 
 int main()
@@ -53,7 +65,9 @@ int main()
     for (int ii = 0; ii < num_cases; ii++) {
         start_case(edge_config[ii], radius_config[ii],
                    in_data, out_baseline, out_accelerate);
+        baseline_fft(c, r, in_data, out_baseline);
+        accelerate_fft(c, r, in_data, out_accelerate);
         check_result();
-        end_case();
+        end_case(in_data, out_baseline, out_accelerate);
     }
 }
