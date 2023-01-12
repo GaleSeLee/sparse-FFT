@@ -20,26 +20,53 @@ void init_edge(std::vector<int> &edge) {
 }
 
 void start_case(int c, int r, std::complex<double> *in,
-                std::complex<double> *out_base, std::complex<double> *out_acce) {
+                std::complex<double> *out_base, std::complex<double> *out_acce,
+                std::complex<double> *in_d, std::complex<double> *out_base_d,
+                std::complex<double> *out_acce_d) {
     int n = c * c * c;
+
     in = (std::complex<double> *)malloc(sizeof(std::complex<double>) * n);
     out_base = (std::complex<double> *)malloc(sizeof(std::complex<double>) * n);
     out_acce = (std::complex<double> *)malloc(sizeof(std::complex<double>) * n);
-    std::memset(out_base, 0, sizeof(std::complex<double>) * n);
-    std::memset(out_acce, 0, sizeof(std::complex<double>) * n);
+    cudaMalloc((void **)&in_d, sizeof(std::complex<double>) * n);
+    cudaMalloc((void **)&out_base_d, sizeof(std::complex<double>) * n);
+    cudaMalloc((void **)&out_acce_d, sizeof(std::complex<double>) * n);
+
     for (int ii = 0; ii < c; ii++) {
         int idx_ii = ii * c * c;
         for (int jj = 0; jj < c; jj++) {
             int idx_jj = idx_ii + jj * c;
             for (int kk = 0; kk < c; kk++)
-                in[idx_jj + kk] = randn();
+                int dis_2 = std::abs(ii - c/2) * std::abs(ii - c/2) +
+                            std::abs(jj - c/2) * std::abs(jj - c/2) +
+                            std::abs(kk - c/2) * std::abs(kk - c/2);
+                if (dis_2 > r * r) {
+                    in[idx_jj + kk] = std::complex<double> (0, 0);
+                }
+                else {
+                    in[idx_jj + kk] = randn();
+                }
         }
     }
+    cudaMemcpy(in_d, in, sizeof(std::complex<double>) * n, cudaMemcpyHostToDevice);
 }
 
 bool check_result(int c, std::complex<double> *out_base,
-                  std::complex<double> *out_acce) {
-
+                  std::complex<double> *out_acce, double tol = 1e-8) {
+    // TODO
+    // 1e-8
+    for (int ii = 0; ii < c; ii++) {
+        int idx_ii = ii * c * c;
+        for (int jj = 0; jj < c; jj++) {
+            int idx_jj = idx_ii + jj * c;
+            for (int kk = 0; kk < c; kk++) {
+                int idx_kk = idx_jj + kk;
+                if (std::abs(out_base[idx_kk]-out_acce[idx_kk]) > tol) {
+                    return false;
+                }
+            }
+    }
+    return true;
 }
 
 void end_case(std::complex<double> *in, std::complex<double> *out_base,
@@ -58,16 +85,41 @@ int main()
     std::complex<double> *in_data;
     std::complex<double> *out_baseline;
     std::complex<double> *out_accelerate;
+    std::complex<double> *in_data_d;
+    std::complex<double> *out_baseline_d;
+    std::complex<double> *out_accelerate_d;
 
     init_edge(edge_config);
     int num_cases = edge_config.size();
 
     for (int ii = 0; ii < num_cases; ii++) {
+         // cpu memory to gpu memory
         start_case(edge_config[ii], radius_config[ii],
-                   in_data, out_baseline, out_accelerate);
-        baseline_fft(c, r, in_data, out_baseline);
-        accelerate_fft(c, r, in_data, out_accelerate);
-        check_result();
+                   in_data, out_baseline, out_accelerate,
+                   in_data_d, out_baseline_d, out_accelerate_d);
+
+        float time_elapsed = 0.0;
+        cudaEvent_t start,stop;
+        cudaEventCreate(&start);
+        cudaEventCreate(&stop);
+
+        cudaEventRecord(start, 0);
+        baseline_fft(c, r, in_data_d, out_baseline_d);
+        cudaEventRecord(stop, 0);
+        cudaEventSynchronize(start);
+        cudaEventSynchronize(stop);
+        cudaEventElapsedTime(&time_elapsed,start,stop);
+        std::cout << "baseline = " << time_elapsed << " ms" << std::endl;
+
+        cudaEventRecord(start, 0);
+        accelerate_fft(c, r, in_data_d, out_accelerate_d);
+        cudaEventRecord(stop, 0);
+        cudaEventSynchronize(start);
+        cudaEventSynchronize(stop);
+        cudaEventElapsedTime(&time_elapsed,start,stop);
+
+        check_result(out_baseline, out_accelerate);
+        std::cout << "accelerate = " << time_elapsed << " ms" << std::endl;
         end_case(in_data, out_baseline, out_accelerate);
     }
 }

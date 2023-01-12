@@ -28,7 +28,6 @@ set_property(
     TARGET ${ABACUS_BIN_NAME}
     PROPERTY CUDA_ARCHITECTURES
     70 # V100
-    75 # T4 / 20x0 30x0 serial
     80 # A100
 )
 target_link_libraries(
