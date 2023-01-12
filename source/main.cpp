@@ -2,25 +2,58 @@
 #include <vector>
 #include <stdlib.h>
 #include <time.h>
+#include <assert.h>
+#include <cstring>
+
+#include "common.h"
+
+extern void baseline_fft(int c, int r, std::complex<double> *, std::complex<double> *);
+extern void accelerate_fft(int c, int r, std::complex<double> *, std::complex<double> *);
+
+void init_edge(std::vector<int> &edge) {
+    for(int ii = 0; ii < edge.size(); ii++) {
+        if (edge[ii] % 2 == 0) {
+            edge[ii] += 1;
+        }
+    } 
+}
+
+void start_case(int c, int r, std::complex<double> *in,
+                std::complex<double> *out_base, std::complex<double> *out_acce) {
+    int n = c * c * c;
+    in = (std::complex<double> *)malloc(sizeof(std::complex<double>) * n);
+    out_base = (std::complex<double> *)malloc(sizeof(std::complex<double>) * n);
+    out_acce = (std::complex<double> *)malloc(sizeof(std::complex<double>) * n);
+    std::memset(out_base, 0, sizeof(std::complex<double>) * n);
+    std::memset(out_acce, 0, sizeof(std::complex<double>) * n);
+}
+
+bool check_result(int c, std::complex<double> *out_base,
+                  std::complex<double> *out_acce) {
+
+}
+
+void end_case() {
+
+}
 
 int main()
 {
-    std::vector<int> edge_config = {};
-    std::vector<int> radius_config = {};
-    std::vector<std::complex<double>> A_baseline = {}, B_baseline = {};
-    std::vector<std::complex<double>> A_accelerate = {}, B_accelerate = {};
-
-    INPUT input();
-    input.init(edge_config, radius_config);
+    std::vector<int> edge_config{32, 32, 64, 64, 128, 128, 256, 256, 512, 512};
+    std::vector<int> radius_config = {8, 6, 16, 12, 32, 24, 64, 48, 96, 128};
     assert(edge_config.size() == radius_config.size());
+
+    std::complex<double> *in_data;
+    std::complex<double> *out_baseline;
+    std::complex<double> *out_accelerate;
+
+    init_edge(edge_config);
     int num_cases = edge_config.size();
 
     for (int ii = 0; ii < num_cases; ii++) {
-        init_complex(A_baseline);
-        A_accelerate = A_baseline;
-        baseline_fft(A_baseline, B_baseline);
-        accelerate_fft(A_accelerate, B_accelerate);
-        check_result(B_baseline, B_accelerate);
-
+        start_case(edge_config[ii], radius_config[ii],
+                   in_data, out_baseline, out_accelerate);
+        check_result();
+        end_case();
     }
 }

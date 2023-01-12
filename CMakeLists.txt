@@ -9,7 +9,13 @@ project(sparseFFT
 
 set(PROJECT_BIN_NAME sparseFFT)
 
-add_executable(${PROJECT_BIN_NAME} source/main.cpp)
+include_directories(./include)
+
+add_executable(${PROJECT_BIN_NAME}
+                source/main.cpp
+                source/baseline.cpp
+                source/accelerate.cpp
+                )
 
 check_language(CUDA)
 set(CMAKE_CXX_STANDARD 14)
@@ -21,9 +27,8 @@ enable_language(CUDA)
 set_property(
     TARGET ${ABACUS_BIN_NAME}
     PROPERTY CUDA_ARCHITECTURES
-    60 # P100
     70 # V100
-    75 # T4
+    75 # T4 / 20x0 30x0 serial
     80 # A100
 )
 target_link_libraries(
