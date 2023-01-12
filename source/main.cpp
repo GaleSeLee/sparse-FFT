@@ -4,12 +4,14 @@
 #include <time.h>
 #include <assert.h>
 #include <cstring>
+
+#include <cufft.h>
 #include <cuda_runtime.h>
 
 #include "common.h"
 
-extern void baseline_fft(int c, int r, std::complex<double> *, std::complex<double> *);
-extern void accelerate_fft(int c, int r, std::complex<double> *, std::complex<double> *);
+extern void baseline_fft(int c, int r, std::complex<double> *in, std::complex<double> *out);
+extern void accelerate_fft(int c, int r, std::complex<double> *in, std::complex<double> *out);
 
 void init_edge(std::vector<int> &edge) {
     for(int ii = 0; ii < edge.size(); ii++) {
@@ -51,6 +53,11 @@ void start_case(int c, int r, std::complex<double> *in,
     cudaMemcpy(in_d, in, sizeof(std::complex<double>) * n, cudaMemcpyHostToDevice);
 }
 
+void warmup_cufft(int c) {
+    cufftHandle plan;
+    cufftPlan3d(&plan, c, c, c, CUFFT_Z2Z);
+}
+
 bool check_result(int c, std::complex<double> *out_base,
                   std::complex<double> *out_acce, double tol = 1e-8) {
     // TODO
@@ -80,6 +87,8 @@ int main()
 {
     std::vector<int> edge_config{32, 32, 64, 64, 128, 128, 256, 256, 512, 512};
     std::vector<int> radius_config = {8, 6, 16, 12, 32, 24, 64, 48, 96, 128};
+    const int repeat_time = 10;
+
     assert(edge_config.size() == radius_config.size());
 
     std::complex<double> *in_data;
@@ -98,25 +107,33 @@ int main()
                    in_data, out_baseline, out_accelerate,
                    in_data_d, out_baseline_d, out_accelerate_d);
 
+        float sum_baseline_time = 0.0;
+        float sum_accelerate_time = 0.0;
         float time_elapsed = 0.0;
         cudaEvent_t start,stop;
         cudaEventCreate(&start);
         cudaEventCreate(&stop);
 
-        cudaEventRecord(start, 0);
-        baseline_fft(c, r, in_data_d, out_baseline_d);
-        cudaEventRecord(stop, 0);
-        cudaEventSynchronize(start);
-        cudaEventSynchronize(stop);
-        cudaEventElapsedTime(&time_elapsed,start,stop);
-        std::cout << "baseline = " << time_elapsed << " ms" << std::endl;
+        warmup_cufft(edge_config[ii]);
+        for (int jj = 0; jj < repeat_time; jj++) {
+            cudaEventRecord(start, 0);
+            baseline_fft(c, r, in_data_d, out_baseline_d);
+            cudaEventRecord(stop, 0);
+            cudaEventSynchronize(start);
+            cudaEventSynchronize(stop);
+            cudaEventElapsedTime(&time_elapsed,start,stop);
+            sum_baseline_time += time_elapsed;
+        }
 
-        cudaEventRecord(start, 0);
-        accelerate_fft(c, r, in_data_d, out_accelerate_d);
-        cudaEventRecord(stop, 0);
-        cudaEventSynchronize(start);
-        cudaEventSynchronize(stop);
-        cudaEventElapsedTime(&time_elapsed,start,stop);
+        for (int jj = 0; jj < repeat_time; jj++) {
+            cudaEventRecord(start, 0);
+            // accelerate_fft(c, r, in_data_d, out_accelerate_d);
+            cudaEventRecord(stop, 0);
+            cudaEventSynchronize(start);
+            cudaEventSynchronize(stop);
+            cudaEventElapsedTime(&time_elapsed,start,stop);
+            sum_accelerate_time += time_elapsed;
+        }
 
         check_result(out_baseline, out_accelerate);
         std::cout << "accelerate = " << time_elapsed << " ms" << std::endl;
