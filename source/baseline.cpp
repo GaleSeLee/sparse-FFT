@@ -7,4 +7,5 @@ void baseline_fft(int c, int r, std::complex<double> *in, std::complex<double> *
     cufftExecZ2Z(plan, reinterpret_cast<cufftDoubleComplex*>(in),
                  reinterpret_cast<cufftDoubleComplex*>(out),
                  CUFFT_INVERSE);
+    cufftDestroy(plan);
 }

@@ -40,28 +40,30 @@ void start_case(int c, int r, std::complex<double> **in,
     *out_base = (std::complex<double> *)malloc(sizeof(std::complex<double>) * n);
     *out_acce = (std::complex<double> *)malloc(sizeof(std::complex<double>) * n);
 
-    //for (int ii = 0; ii < c; ii++) {
-    //    int idx_ii = ii * c * c;
-   //     for (int jj = 0; jj < c; jj++) {
-   //         int idx_jj = idx_ii + jj * c;
-    //        for (int kk = 0; kk < c; kk++) {
-   //             int dis_2 = std::abs(ii - c/2) * std::abs(ii - c/2) +
-  //                          std::abs(jj - c/2) * std::abs(jj - c/2) +
-  //                          std::abs(kk - c/2) * std::abs(kk - c/2);
-   //             if (dis_2 > r * r) {
-  //                  (*in)[idx_jj + kk] = std::complex<double> (0, 0);
- //               }
- //               else {
- //                   (*in)[idx_jj + kk] = randn();
- //               }
- //           }
- //       }
-  //  }
+    // There will be a better way to init data
+    for (int ii = 0; ii < c; ii++) {
+        int idx_ii = ii * c * c;
+        for (int jj = 0; jj < c; jj++) {
+            int idx_jj = idx_ii + jj * c;
+            for (int kk = 0; kk < c; kk++) {
+                int dis_2 = std::abs(ii - c/2) * std::abs(ii - c/2) +
+                            std::abs(jj - c/2) * std::abs(jj - c/2) +
+                            std::abs(kk - c/2) * std::abs(kk - c/2);
+                if (dis_2 > r * r) {
+                    (*in)[idx_jj + kk] = std::complex<double> (0, 0);
+                }
+                else {
+                    (*in)[idx_jj + kk] = randn();
+                }
+            }
+        }
+    }
 }
 
 void warmup_cufft(int c) {
     cufftHandle plan;
     cufftPlan3d(&plan, c, c, c, CUFFT_Z2Z);
+    cufftDestroy(plan);
 }
 
 bool check_result(int c, std::complex<double> *out_base,
@@ -90,10 +92,8 @@ void end_case(std::complex<double> **in, std::complex<double> **out_base,
 
 int main()
 {
-	//std::vector<int> edge_config = {32, 32, 64, 64, 128, 128, 256, 256, 512, 512};
-	//std::vector<int> radius_config = {8, 6, 16, 12, 32, 24, 64, 48, 96, 128};
-    std::vector<int> edge_config = {256,256};
-    std::vector<int> radius_config = {128, 128};
+	std::vector<int> edge_config = {32, 32, 64, 64, 128, 128, 256, 256, 512, 512};
+	std::vector<int> radius_config = {8, 6, 16, 12, 32, 24, 64, 48, 96, 128};
     const int repeat_time = 10;
 
     assert(edge_config.size() == radius_config.size());
@@ -112,7 +112,6 @@ int main()
         int c = edge_config[ii];
 		int n = c * c * c;
         int r = radius_config[ii];
-         // cpu memory to gpu memory
         start_case(c, r, &in_data, &out_baseline, &out_accelerate);
 
 		cudaMalloc((void **)&in_data_d, sizeof(std::complex<double>) * n);
@@ -126,10 +125,10 @@ int main()
         cudaEventCreate(&start);
         cudaEventCreate(&stop);
 
-        warmup_cufft(edge_config[ii]);
+        warmup_cufft(c);
         for (int jj = 0; jj < repeat_time; jj++) {
             cudaEventRecord(start);
-            //baseline_fft(c, r, in_data_d, out_baseline_d);
+            baseline_fft(c, r, in_data_d, out_baseline_d);
             cudaDeviceSynchronize();
             cuErrCheck(cudaGetLastError());
             cudaEventRecord(stop);
@@ -140,16 +139,11 @@ int main()
 
 		cudaMemcpy(out_baseline, out_baseline_d,
 				   sizeof(std::complex<double>) * c * c * c, cudaMemcpyDeviceToHost);
-	    std::cout << "start" <<std::endl;
-		sleep(5);
-		cudaFree(out_baseline_d);
-		std::cout << "end0" <<std::endl;
-		sleep(5);
-		std::cout << "end" <<std::endl;
+        cudaFree(out_baseline_d);
 
         for (int jj = 0; jj < repeat_time; jj++) {
             cudaEventRecord(start, 0);
-            // baseline_fft(c, r, in_data_d, out_accelerate_d);
+            // need to complete
             // accelerate_fft(c, r, in_data_d, out_accelerate_d);
             cudaDeviceSynchronize();
             cuErrCheck(cudaGetLastError());
@@ -160,17 +154,13 @@ int main()
         }
 		cudaMemcpy(out_accelerate, out_accelerate_d,
 				   sizeof(std::complex<double>) * c * c * c, cudaMemcpyDeviceToHost);
-		sleep(10);
-	    std::cout << "start" <<std::endl;
 	    cudaFree(out_accelerate_d);
-		sleep(10);
 		cudaFree(in_data_d);
-		sleep(10);
 
-        //if (!check_result(c, out_baseline, out_accelerate)) {
-//			std::cout << "Error" << std::endl;
-//			exit(1);
-//		}
+        if (!check_result(c, out_baseline, out_accelerate)) {
+			std::cout << "Error" << std::endl;
+			exit(1);
+		}
         end_case(&in_data, &out_baseline, &out_accelerate);
 
         std::cout << "accelerate = " << sum_baseline_time << " ms" << std::endl;
