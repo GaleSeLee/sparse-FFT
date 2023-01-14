@@ -46,9 +46,9 @@ void start_case(int c, int r, std::complex<double> **in,
         for (int jj = 0; jj < c; jj++) {
             int idx_jj = idx_ii + jj * c;
             for (int kk = 0; kk < c; kk++) {
-                int dis_2 = std::abs(ii - c/2) * std::abs(ii - c/2) +
-                            std::abs(jj - c/2) * std::abs(jj - c/2) +
-                            std::abs(kk - c/2) * std::abs(kk - c/2);
+                int dis_2 = (ii - c/2) * (ii - c/2) +
+                            (jj - c/2) * (jj - c/2) +
+                            (kk - c/2) * (kk - c/2);
                 if (dis_2 > r * r) {
                     (*in)[idx_jj + kk] = std::complex<double> (0, 0);
                 }
